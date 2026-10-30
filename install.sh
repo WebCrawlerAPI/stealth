@@ -9,7 +9,7 @@
 set -eu
 
 REPO="WebCrawlerAPI/stealth"
-REF="${STEALTH_REF:-main}"
+REF="${STEALTH_REF:-master}"
 OUT="${1:-stealth.js}"
 TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 

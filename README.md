@@ -55,7 +55,7 @@ GH_TOKEN=ghp_xxx sh install.sh            # writes ./stealth.js
 curl -fsSL \
   -H "Authorization: Bearer $GH_TOKEN" \
   -H "Accept: application/vnd.github.raw" \
-  "https://api.github.com/repos/WebCrawlerAPI/stealth/contents/stealth.js?ref=main" \
+  "https://api.github.com/repos/WebCrawlerAPI/stealth/contents/stealth.js?ref=master" \
   -o stealth.js
 ```
 
