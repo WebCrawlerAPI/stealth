@@ -21,7 +21,7 @@ const UA =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36';
 
-const VERSION = '1.0.2';
+const VERSION = '1.0.3';
 
 /* ------------------------------------------------------------------ *
  * The in-page bootstrap. Runs inside every document before page JS.  *
@@ -294,10 +294,14 @@ function buildInitScript(cfg) {
   } catch (_) {}
 
   // --- WebGL vendor / renderer ---
-  // Spoofing is applied only when software rendering is detected (SwiftShader /
-  // llvmpipe / Mesa OffScreen) or the caller explicitly asked for it. When the
-  // engine already reports a real GPU we leave it alone: swapping a real, coherent
-  // renderer for a different one only creates contradictions.
+  // Spoofing is applied only when the renderer gives the host away (software
+  // rendering such as SwiftShader / llvmpipe / Mesa OffScreen, or a server /
+  // datacenter GPU such as an NVIDIA L40S, A100, H100, T4 or vGPU slice) or the
+  // caller explicitly asked for it. When the engine reports an ordinary consumer
+  // GPU we leave it alone: swapping a real, coherent renderer for a different one
+  // only creates contradictions. A datacenter GPU is not a consumer GPU: real
+  // cloud-browser hosts (e.g. Kernel) expose one and bot protection (Reuters)
+  // blocks on it.
   try {
     let softwareGL = false;
     try {
@@ -308,7 +312,9 @@ function buildInitScript(cfg) {
         const real = dbg
           ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '')
           : String(gl.getParameter(gl.RENDERER) || '');
-        softwareGL = /swiftshader|llvmpipe|software|mesa offscreen|angle \(google/i.test(real);
+        softwareGL =
+          /swiftshader|llvmpipe|software|mesa offscreen|angle \(google/i.test(real) ||
+          /\b(?:[AHL]\d{2,3}[A-Z]?|T4|V100|K80|P100|P4|GRID|Tesla|vGPU)\b|-\d+Q\b|NVIDIA (?:A|H|L)\d/i.test(real);
       }
     } catch (_) {}
 

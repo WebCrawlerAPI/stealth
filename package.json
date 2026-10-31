@@ -1,6 +1,6 @@
 {
   "name": "@webcrawlerapi/stealth",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Zero-dependency stealth layer for Puppeteer / CDP browsers (works with launch() and connect()).",
   "main": "stealth.js",
   "types": "stealth.d.ts",
