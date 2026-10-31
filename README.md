@@ -30,6 +30,7 @@ The two functions you normally need are:
 | `matchMedia` pointer / hover | normalized |
 | `window.outerWidth` / `outerHeight` | corrected to inner + chrome |
 | `Error.prepareStackTrace` | installed if absent |
+| `User-Agent` header + `navigator.userAgent` (`HeadlessChrome` token) | read from `browser.userAgent()` and `HeadlessChrome` → `Chrome` via `page.setUserAgent`; never hardcoded, so the version always matches the real engine. Skip with `fixUserAgent: false`, or pass `userAgent` |
 
 ---
 

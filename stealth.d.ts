@@ -19,6 +19,10 @@ export interface StealthOptions {
   userDataDir?: string;
   /** Launch only: extra chrome args. */
   args?: string[];
+  /** Explicit User-Agent for the page. Default: browser UA with "HeadlessChrome" replaced by "Chrome". */
+  userAgent?: string;
+  /** Set to false to skip the User-Agent fix. Default true. */
+  fixUserAgent?: boolean;
   /** newPage only: origin for overridePermissions. */
   origin?: string;
   /** newPage only: permissions to grant. */
@@ -47,6 +51,7 @@ export declare const UA: string;
 export declare function buildInitScript(cfg?: StealthOptions): void;
 export declare function buildSource(opts?: StealthOptions): string;
 export declare function installStealth(page: PageLike, opts?: StealthOptions): Promise<PageLike>;
+export declare function fixUserAgent(page: PageLike, opts?: StealthOptions): Promise<PageLike>;
 export declare function injectNow(page: PageLike, opts?: StealthOptions): Promise<PageLike>;
 export declare function installOopifHook(browser: BrowserLike, opts?: StealthOptions): BrowserLike;
 export declare function newPage(browser: BrowserLike, opts?: StealthOptions): Promise<PageLike>;

@@ -352,7 +352,40 @@ async function installStealth(page, opts) {
   opts = opts || {};
   const cfg = resolveConfig(opts);
   await page.evaluateOnNewDocument(buildInitScript, cfg);
+  await fixUserAgent(page, opts);
   try { page[INSTALLED] = true; } catch (_) {}
+  return page;
+}
+
+/**
+ * Headless Chrome announces itself as "HeadlessChrome/<ver>" in both the
+ * `User-Agent` request header and navigator.userAgent. The header is set by the
+ * network stack, so the in-page patches can't touch it; it has to go through
+ * the CDP UA override (page.setUserAgent).
+ *
+ * The UA is read from the running browser (browser.userAgent()) instead of
+ * being hardcoded, so the Chrome version always matches the real engine and
+ * never goes stale when the bundled Chrome is upgraded.
+ *
+ *   opts.userAgent       explicit UA, used as is
+ *   opts.fixUserAgent    set to false to skip
+ *
+ * No-op when the browser UA has no "HeadlessChrome" token (headful, connect()).
+ */
+async function fixUserAgent(page, opts) {
+  opts = opts || {};
+  if (opts.fixUserAgent === false || typeof page.setUserAgent !== 'function') return page;
+  try {
+    let ua = opts.userAgent;
+    if (!ua) {
+      const browser = typeof page.browser === 'function' ? page.browser() : null;
+      if (!browser || typeof browser.userAgent !== 'function') return page;
+      const current = await browser.userAgent();
+      if (!/HeadlessChrome/.test(current)) return page;
+      ua = current.replace('HeadlessChrome', 'Chrome');
+    }
+    await page.setUserAgent(ua);
+  } catch (_) {}
   return page;
 }
 
@@ -468,6 +501,7 @@ module.exports = {
   buildInitScript,
   buildSource,
   installStealth,
+  fixUserAgent,
   injectNow,
   installOopifHook,
   newPage,
