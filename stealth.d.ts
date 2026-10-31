@@ -1,13 +1,15 @@
 export interface StealthOptions {
-  /** WebGL UNMASKED_RENDERER_WEBGL value to report. */
+  /** WebGL UNMASKED_RENDERER_WEBGL to report. Only applied when software GL is detected or this is set; defaults to an OS-appropriate renderer. */
   webglRenderer?: string;
-  /** WebGL UNMASKED_VENDOR_WEBGL value to report. */
+  /** WebGL UNMASKED_VENDOR_WEBGL to report. Only applied when software GL is detected or this is set; defaults to an OS-appropriate vendor. */
   webglVendor?: string;
-  /** navigator.hardwareConcurrency override. */
+  /** navigator.hardwareConcurrency override. Left as the host value when omitted. */
   hardwareConcurrency?: number;
-  /** navigator.deviceMemory override. */
+  /** navigator.deviceMemory override. Left as the host value when omitted. */
   deviceMemory?: number;
-  /** navigator.platform override. */
+  /** navigator.languages / language override. Left as the host value when omitted. */
+  languages?: string[];
+  /** navigator.platform override. Left as the host value when omitted. */
   platform?: string;
   /** Launch only: injected puppeteer instance. */
   puppeteer?: unknown;

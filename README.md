@@ -21,14 +21,14 @@ The two functions you normally need are:
 | `Function.prototype.toString` + anonymous injected globals | native-looking `toString` via a `WeakSet` cloak |
 | `navigator.webdriver` | deleted + faked to `false` |
 | WebDriver / Selenium / Playwright residue (`cdc_*`, `__webdriver_*`, `__selenium_*`, `__pw*`, `__playwright_*`) | removed |
-| `navigator.languages / platform / hardwareConcurrency / deviceMemory / vendor / onLine` | normalized |
+| `navigator.languages / platform / hardwareConcurrency / deviceMemory` | left as the host reports them; overridable via `opts` |
 | `window.chrome` (`runtime`, `loadTimes`, `csi`, `app`) | faked when missing |
-| `navigator.userAgentData` (`brands`, `getHighEntropyValues`) | faked |
+| `navigator.userAgentData` (`brands`, `getHighEntropyValues`) | faked **only when missing**; a real UA-CH object is left untouched |
 | `navigator.plugins` / `mimeTypes` (when empty) | faked |
 | `navigator.permissions.query` | notifications → `default` |
-| WebGL `UNMASKED_VENDOR_WEBGL` / `UNMASKED_RENDERER_WEBGL` | spoofed (hides SwiftShader / software GL) |
+| WebGL `UNMASKED_VENDOR_WEBGL` / `UNMASKED_RENDERER_WEBGL` | spoofed with an **OS-consistent** GPU only when software GL (SwiftShader / llvmpipe) is detected, or when `webglRenderer`/`webglVendor` is set. A real GPU is reported as-is |
 | `matchMedia` pointer / hover | normalized |
-| `window.outerWidth` / `outerHeight` | corrected to inner + chrome |
+| `window.outerWidth` / `outerHeight` | corrected only when smaller than the inner size |
 | `Error.prepareStackTrace` | installed if absent |
 | `User-Agent` header + `navigator.userAgent` (`HeadlessChrome` token) | read from `browser.userAgent()` and `HeadlessChrome` → `Chrome` via `page.setUserAgent`; never hardcoded, so the version always matches the real engine. Skip with `fixUserAgent: false`, or pass `userAgent` |
 
@@ -189,11 +189,12 @@ Optional launcher. Requires puppeteer via `opts.puppeteer` or resolved lazily
 
 | Key | Default | Used by |
 |-----|---------|---------|
-| `webglRenderer` / `renderer` | `ANGLE (Intel, ...)` | all |
-| `webglVendor` / `vendor` | `Google Inc. (Intel)` | all |
-| `hardwareConcurrency` | `8` | all |
-| `deviceMemory` | `8` | all |
-| `platform` | `Linux x86_64` | all |
+| `webglRenderer` / `renderer` | OS-appropriate GPU (only applied when software GL is detected) | all |
+| `webglVendor` / `vendor` | OS-appropriate vendor (only applied when software GL is detected) | all |
+| `hardwareConcurrency` | host value | all |
+| `deviceMemory` | host value | all |
+| `languages` | host value | all |
+| `platform` | host value | all |
 | `origin` / `permissions` | — | `newPage` |
 | `puppeteer` | lazily resolved | `launch` |
 | `executablePath` | `$CHROME_PATH` | `launch` |

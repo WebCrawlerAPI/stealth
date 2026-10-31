@@ -23,10 +23,6 @@ const UA =
 
 const VERSION = '1.0.1';
 
-const DEFAULT_RENDERER =
-  'ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00003E9B) Direct3D11 vs_5_0 ps_5_0, D3D11)';
-const DEFAULT_VENDOR = 'Google Inc. (Intel)';
-
 /* ------------------------------------------------------------------ *
  * The in-page bootstrap. Runs inside every document before page JS.  *
  * Serialized by evaluateOnNewDocument() / addScriptToEvaluateOnNewDocument()
@@ -34,8 +30,59 @@ const DEFAULT_VENDOR = 'Google Inc. (Intel)';
  * ------------------------------------------------------------------ */
 function buildInitScript(cfg) {
   cfg = cfg || {};
-  const renderer = cfg.renderer || 'ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00003E9B) Direct3D11 vs_5_0 ps_5_0, D3D11)';
-  const vendor = cfg.vendor || 'Google Inc. (Intel)';
+
+  // One coherent profile per OS family. The values inside a profile are chosen
+  // together so the platform string, UA-CH hints, WebGL strings and geometry
+  // all agree with each other *and* with the real Chrome build running the page.
+  // (A Windows-only renderer like "Direct3D11" on a Linux platform is a
+  // contradiction a fingerprinting script can spot, so we never mix families.)
+  const PROFILES = {
+    windows: {
+      platform: 'Win32',
+      uaPlatform: 'Windows',
+      platformVersion: '10.0.0',
+      architecture: 'x86',
+      bitness: '64',
+      renderer: 'ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00003E9B) Direct3D11 vs_5_0 ps_5_0, D3D11)',
+      vendor: 'Google Inc. (Intel)',
+    },
+    mac: {
+      platform: 'MacIntel',
+      uaPlatform: 'macOS',
+      platformVersion: '15.0.0',
+      architecture: 'arm',
+      bitness: '64',
+      renderer: 'ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)',
+      vendor: 'Google Inc. (Apple)',
+    },
+    linux: {
+      platform: 'Linux x86_64',
+      uaPlatform: 'Linux',
+      platformVersion: '',
+      architecture: 'x86',
+      bitness: '64',
+      renderer: 'ANGLE (Intel, Mesa Intel(R) UHD Graphics 630 (CFL GT2), OpenGL 4.6 (Core Profile) Mesa 22.0.5)',
+      vendor: 'Google Inc. (Intel)',
+    },
+  };
+
+  // Derive everything from the real browser so the profile can never drift
+  // away from the engine that is actually running.
+  const realUA = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+  const chromeVer = (realUA.match(/Chrome\/(\d+)/) || [])[1] || '120';
+  const fullVersion = chromeVer + '.0.0.0';
+  const osFamily = /Windows/i.test(realUA)
+    ? 'windows'
+    : /Macintosh|Mac OS X/i.test(realUA)
+      ? 'mac'
+      : 'linux';
+  const profile = PROFILES[osFamily];
+
+  // Optional overrides. Anything not supplied keeps the host's real value, so
+  // the page never contradicts the machine it is running on.
+  const renderer = cfg.renderer || profile.renderer;
+  const vendor = cfg.vendor || profile.vendor;
+  const languages = cfg.languages;
 
   const patched = new WeakSet();
 
@@ -117,17 +164,27 @@ function buildInitScript(cfg) {
     };
   }
 
-  // --- navigator.languages / language ---
-  try { getter(Navigator.prototype, 'languages', Object.freeze(['en-US', 'en']), 'languages'); } catch (_) {}
-  try { getter(Navigator.prototype, 'language', 'en-US', 'language'); } catch (_) {}
+  // --- navigator.languages / language (only when the caller asked for it) ---
+  // Overriding these while leaving the Accept-Language request header alone
+  // would make the JS view disagree with the network view.
+  if (Array.isArray(languages) && languages.length) {
+    try { getter(Navigator.prototype, 'languages', Object.freeze(languages.slice()), 'languages'); } catch (_) {}
+    try { getter(Navigator.prototype, 'language', languages[0], 'language'); } catch (_) {}
+  }
 
-  // --- hardware / platform ---
-  try { getter(Navigator.prototype, 'hardwareConcurrency', cfg.hardwareConcurrency || 8, 'hardwareConcurrency'); } catch (_) {}
-  try { getter(Navigator.prototype, 'deviceMemory', cfg.deviceMemory || 8, 'deviceMemory'); } catch (_) {}
-  try { getter(Navigator.prototype, 'platform', cfg.platform || 'Linux x86_64', 'platform'); } catch (_) {}
-  try { getter(Navigator.prototype, 'maxTouchPoints', 0, 'maxTouchPoints'); } catch (_) {}
-  try { getter(Navigator.prototype, 'vendor', 'Google Inc.', 'vendor'); } catch (_) {}
-  try { getter(Navigator.prototype, 'onLine', true, 'onLine'); } catch (_) {}
+  // --- platform / vendor / hardware ---
+  // These already match the real engine, so they are left untouched unless an
+  // explicit override is supplied. Forcing a value the host does not actually
+  // have (e.g. hardwareConcurrency 8 on a 4-core box) is itself a tell.
+  if (cfg.platform) {
+    try { getter(Navigator.prototype, 'platform', cfg.platform, 'platform'); } catch (_) {}
+  }
+  if (cfg.hardwareConcurrency) {
+    try { getter(Navigator.prototype, 'hardwareConcurrency', cfg.hardwareConcurrency, 'hardwareConcurrency'); } catch (_) {}
+  }
+  if (cfg.deviceMemory) {
+    try { getter(Navigator.prototype, 'deviceMemory', cfg.deviceMemory, 'deviceMemory'); } catch (_) {}
+  }
 
   // --- plugins / mimeTypes (only when empty) ---
   try {
@@ -195,55 +252,86 @@ function buildInitScript(cfg) {
   } catch (_) {}
 
   // --- userAgentData ---
+  // When the engine exposes UA-CH it is already consistent with the UA string
+  // and the sec-ch-ua headers, so it is left alone. The synthetic object is only
+  // built when it is genuinely missing, and then from the same profile.
   try {
-    const brands = [
-      { brand: 'Chromium', version: '151' },
-      { brand: 'Not?A_Brand', version: '24' },
-      { brand: 'Google Chrome', version: '151' },
-    ];
-    const fullVersionList = brands.map((b) => ({ brand: b.brand, version: b.brand === 'Not?A_Brand' ? '24.0.0.0' : '151.0.7922.108' }));
-    const highEntropy = {
-      architecture: 'x86', bitness: '64', brands, fullVersionList, mobile: false, model: '',
-      platform: 'Linux', platformVersion: '6.8.0', uaFullVersion: '151.0.7922.108', wow64: false,
-    };
-    const data = {
-      brands, mobile: false, platform: 'Linux',
-      getHighEntropyValues: cloak(function getHighEntropyValues(hints) {
-        const out = { brands, mobile: false, platform: 'Linux' };
-        (hints || []).forEach((h) => { if (h in highEntropy) out[h] = highEntropy[h]; });
-        return Promise.resolve(out);
-      }, 'getHighEntropyValues'),
-      toJSON: cloak(function toJSON() { return { brands, mobile: false, platform: 'Linux' }; }, 'toJSON'),
-    };
-    if (navigator.userAgentData) {
-      try {
-        Object.defineProperty(Navigator.prototype, 'userAgentData', { get: cloak(function () { return data; }, 'get userAgentData'), configurable: true });
-      } catch (_) {}
-    } else {
+    if (!navigator.userAgentData) {
+      const grease = '24';
+      const brands = [
+        { brand: 'Chromium', version: chromeVer },
+        { brand: 'Google Chrome', version: chromeVer },
+        { brand: 'Not?A_Brand', version: grease },
+      ];
+      const fullVersionList = [
+        { brand: 'Chromium', version: fullVersion },
+        { brand: 'Google Chrome', version: fullVersion },
+        { brand: 'Not?A_Brand', version: grease + '.0.0.0' },
+      ];
+      const highEntropy = {
+        architecture: profile.architecture,
+        bitness: profile.bitness,
+        brands,
+        fullVersionList,
+        mobile: false,
+        model: '',
+        platform: profile.uaPlatform,
+        platformVersion: profile.platformVersion,
+        uaFullVersion: fullVersion,
+        wow64: false,
+      };
+      const data = {
+        brands, mobile: false, platform: profile.uaPlatform,
+        getHighEntropyValues: cloak(function getHighEntropyValues(hints) {
+          const out = { brands, mobile: false, platform: profile.uaPlatform };
+          (hints || []).forEach((h) => { if (h in highEntropy) out[h] = highEntropy[h]; });
+          return Promise.resolve(out);
+        }, 'getHighEntropyValues'),
+        toJSON: cloak(function toJSON() { return { brands, mobile: false, platform: profile.uaPlatform }; }, 'toJSON'),
+      };
       getter(Navigator.prototype, 'userAgentData', data, 'userAgentData');
     }
   } catch (_) {}
 
   // --- WebGL vendor / renderer ---
+  // Spoofing is applied only when software rendering is detected (SwiftShader /
+  // llvmpipe / Mesa OffScreen) or the caller explicitly asked for it. When the
+  // engine already reports a real GPU we leave it alone: swapping a real, coherent
+  // renderer for a different one only creates contradictions.
   try {
-    for (const name of ['WebGLRenderingContext', 'WebGL2RenderingContext']) {
-      const Ctor = window[name];
-      if (!Ctor || !Ctor.prototype) continue;
-      const origGetParameter = Ctor.prototype.getParameter;
-      const origGetExtension = Ctor.prototype.getExtension;
-      const getParameter = cloak(function getParameter(p) {
-        if (p === 37445) return vendor;
-        if (p === 37446) return renderer;
-        return origGetParameter.call(this, p);
-      }, 'getParameter');
-      const getExtension = cloak(function getExtension(n) {
-        if (n === 'WEBGL_debug_renderer_info') {
-          return { UNMASKED_VENDOR_WEBGL: 37445, UNMASKED_RENDERER_WEBGL: 37446 };
-        }
-        return origGetExtension.call(this, n);
-      }, 'getExtension');
-      Object.defineProperty(Ctor.prototype, 'getParameter', { value: getParameter, writable: true, configurable: true });
-      Object.defineProperty(Ctor.prototype, 'getExtension', { value: getExtension, writable: true, configurable: true });
+    let softwareGL = false;
+    try {
+      const probe = document.createElement('canvas');
+      const gl = probe.getContext('webgl') || probe.getContext('experimental-webgl');
+      if (gl) {
+        const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+        const real = dbg
+          ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '')
+          : String(gl.getParameter(gl.RENDERER) || '');
+        softwareGL = /swiftshader|llvmpipe|software|mesa offscreen|angle \(google/i.test(real);
+      }
+    } catch (_) {}
+
+    if (softwareGL || cfg.renderer || cfg.vendor) {
+      for (const name of ['WebGLRenderingContext', 'WebGL2RenderingContext']) {
+        const Ctor = window[name];
+        if (!Ctor || !Ctor.prototype) continue;
+        const origGetParameter = Ctor.prototype.getParameter;
+        const origGetExtension = Ctor.prototype.getExtension;
+        const getParameter = cloak(function getParameter(p) {
+          if (p === 37445) return vendor;
+          if (p === 37446) return renderer;
+          return origGetParameter.call(this, p);
+        }, 'getParameter');
+        const getExtension = cloak(function getExtension(n) {
+          if (n === 'WEBGL_debug_renderer_info') {
+            return { UNMASKED_VENDOR_WEBGL: 37445, UNMASKED_RENDERER_WEBGL: 37446 };
+          }
+          return origGetExtension.call(this, n);
+        }, 'getExtension');
+        Object.defineProperty(Ctor.prototype, 'getParameter', { value: getParameter, writable: true, configurable: true });
+        Object.defineProperty(Ctor.prototype, 'getExtension', { value: getExtension, writable: true, configurable: true });
+      }
     }
   } catch (_) {}
 
@@ -307,11 +395,14 @@ function buildInitScript(cfg) {
   } catch (_) {}
 
   // --- window geometry drift ---
+  // outerWidth/outerHeight must be >= the inner ones. Only correct the cases
+  // that are actually broken instead of forcing a value that may contradict the
+  // real window manager.
   try {
     const innerH = window.innerHeight || 900;
     const innerW = window.innerWidth || 1366;
-    getter(window, 'outerHeight', innerH + 20, 'outerHeight');
-    getter(window, 'outerWidth', innerW, 'outerWidth');
+    if (!window.outerWidth || window.outerWidth < innerW) getter(window, 'outerWidth', innerW + 16, 'outerWidth');
+    if (!window.outerHeight || window.outerHeight < innerH) getter(window, 'outerHeight', innerH + 88, 'outerHeight');
   } catch (_) {}
 }
 
@@ -321,12 +412,15 @@ function buildInitScript(cfg) {
 
 function resolveConfig(opts) {
   opts = opts || {};
+  // Only carry explicit overrides. Defaults are resolved in-page from the real
+  // browser (see buildInitScript) so the profile cannot contradict the engine.
   return {
-    renderer: opts.webglRenderer || opts.renderer || DEFAULT_RENDERER,
-    vendor: opts.webglVendor || opts.vendor || DEFAULT_VENDOR,
+    renderer: opts.webglRenderer || opts.renderer,
+    vendor: opts.webglVendor || opts.vendor,
     hardwareConcurrency: opts.hardwareConcurrency,
     deviceMemory: opts.deviceMemory,
     platform: opts.platform,
+    languages: opts.languages,
   };
 }
 
