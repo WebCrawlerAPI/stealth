@@ -21,7 +21,7 @@ const UA =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36';
 
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 
 const DEFAULT_RENDERER =
   'ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00003E9B) Direct3D11 vs_5_0 ps_5_0, D3D11)';
